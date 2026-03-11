@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>SmartClass AI – Campus Occupancy Intelligence</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+
+body{
+font-family:Arial;
+background:#0f172a;
+color:white;
+text-align:center;
+}
+
+video{
+width:90%;
+border-radius:12px;
+margin-top:15px;
+}
+
+canvas{
+position:absolute;
+left:5%;
+top:130px;
+}
+
+.panel{
+margin-top:20px;
+font-size:18px;
+}
+
+.safe{color:#00ff9c;}
+.warning{color:orange;}
+.danger{color:red;}
+
+.riskmeter{
+width:80%;
+height:20px;
+background:#333;
+margin:auto;
+border-radius:10px;
+overflow:hidden;
+}
+
+.riskbar{
+height:100%;
+width:0%;
+background:lime;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h2>🏫 SmartClass AI – Campus Occupancy Intelligence</h2>
+
+<video id="video" autoplay></video>
+<canvas id="overlay"></canvas>
+
+<audio id="alarm" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+
+<div class="panel">
+
+<div id="people">Students detected: 0</div>
+
+<div id="occupancy">Occupancy: 0%</div>
+
+<div id="status">Status: SAFE</div>
+
+<div id="prediction">Prediction: Stable</div>
+
+<div id="energy">Energy Advice: Normal</div>
+
+<div id="system">System Health: Active</div>
+
+</div>
+
+<h3>Crowd Risk Level</h3>
+
+<div class="riskmeter">
+<div id="riskbar" class="riskbar"></div>
+</div>
+
+<canvas id="chart"></canvas>
+
+<script>
+
+const CAPACITY=40;
+
+const video=document.getElementById("video");
+const canvas=document.getElementById("overlay");
+const ctx=canvas.getContext("2d");
+
+navigator.mediaDevices.getUserMedia({video:true})
+.then(stream=>{
+video.srcObject=stream;
+});
+
+let history=[];
+
+const chart=new Chart(document.getElementById("chart"),{
+type:"line",
+data:{
+labels:[],
+datasets:[{
+label:"Classroom Occupancy",
+data:[],
+borderWidth:2
+}]
+},
+options:{responsive:true}
+});
+
+async function startAI(){
+
+const model=await cocoSsd.load();
+
+setInterval(async()=>{
+
+const predictions=await model.detect(video);
+
+canvas.width=video.videoWidth;
+canvas.height=video.videoHeight;
+
+ctx.clearRect(0,0,canvas.width,canvas.height);
+
+let people=predictions.filter(p=>p.class==="person");
+
+people.forEach(p=>{
+
+let color="lime";
+
+if(people.length>15) color="orange";
+if(people.length>30) color="red";
+
+ctx.strokeStyle=color;
+ctx.lineWidth=2;
+ctx.strokeRect(...p.bbox);
+
+});
+
+let count=people.length;
+
+let occupancy=Math.round((count/CAPACITY)*100);
+
+document.getElementById("people").innerText=
+"Students detected: "+count;
+
+document.getElementById("occupancy").innerText=
+"Occupancy: "+occupancy+"%";
+
+history.push(count);
+
+if(history.length>5) history.shift();
+
+let prediction="Stable";
+
+if(history.length>=2){
+
+let diff=history[history.length-1]-history[history.length-2];
+
+if(diff>3) prediction="Increasing Crowd";
+if(diff<-3) prediction="Decreasing Crowd";
+
+}
+
+document.getElementById("prediction").innerText=
+"Prediction: "+prediction;
+
+let status="SAFE";
+let energy="Normal";
+
+if(occupancy<20) energy="Reduce lights and AC";
+if(occupancy>70) status="HIGH OCCUPANCY";
+
+if(occupancy>90){
+
+status="OVERCROWDED";
+document.getElementById("alarm").play();
+
+}
+
+let statusBox=document.getElementById("status");
+
+if(status==="SAFE")
+statusBox.innerHTML="Status: <span class='safe'>SAFE</span>";
+
+if(status==="HIGH OCCUPANCY")
+statusBox.innerHTML="Status: <span class='warning'>HIGH OCCUPANCY</span>";
+
+if(status==="OVERCROWDED")
+statusBox.innerHTML="Status: <span class='danger'>OVERCROWDED</span>";
+
+document.getElementById("energy").innerText=
+"Energy Advice: "+energy;
+
+document.getElementById("riskbar").style.width=occupancy+"%";
+
+updateChart(count);
+
+},1000);
+
+}
+
+function updateChart(count){
+
+let time=new Date().toLocaleTimeString();
+
+chart.data.labels.push(time);
+chart.data.datasets[0].data.push(count);
+
+if(chart.data.labels.length>10){
+chart.data.labels.shift();
+chart.data.datasets[0].data.shift();
+}
+
+chart.update();
+
+}
+
+startAI();
+
+</script>
+
+</body>
+</html>
