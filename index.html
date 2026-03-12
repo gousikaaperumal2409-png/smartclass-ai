@@ -1,64 +1,63 @@
 <!DOCTYPE html>
 <html>
 <head>
-
 <title>SmartClass AI</title>
 
+<!-- Load Face API library -->
+<script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.0.3/dist/face-api.min.js"></script>
+
 <style>
-
-body{
-font-family: Arial;
-background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
-color:white;
-text-align:center;
-padding:20px;
+body {
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+    color: white;
+    text-align: center;
+    padding: 20px;
 }
 
-h1{
-font-size:40px;
-margin-bottom:10px;
+h1 {
+    font-size: 40px;
+    margin-bottom: 10px;
 }
 
-button{
-padding:12px 20px;
-font-size:18px;
-margin:10px;
-border:none;
-border-radius:6px;
-cursor:pointer;
+button {
+    padding: 12px 20px;
+    font-size: 18px;
+    margin: 10px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
 }
 
-video{
-width:85%;
-border-radius:10px;
-margin-top:20px;
+video {
+    width: 85%;
+    border-radius: 10px;
+    margin-top: 20px;
 }
 
-#info{
-font-size:22px;
-margin-top:20px;
+#info {
+    font-size: 22px;
+    margin-top: 20px;
 }
 
-#riskBar{
-width:80%;
-height:20px;
-background:#444;
-margin:20px auto;
-border-radius:10px;
+#riskBar {
+    width: 80%;
+    height: 20px;
+    background: #444;
+    margin: 20px auto;
+    border-radius: 10px;
 }
 
-#riskFill{
-height:100%;
-width:10%;
-background:lime;
-border-radius:10px;
+#riskFill {
+    height: 100%;
+    width: 10%;
+    background: lime;
+    border-radius: 10px;
 }
-
 </style>
 </head>
 
 <body>
-
 <h1>🏫 SmartClass AI</h1>
 <h2>Real-Time Classroom Occupancy Monitoring</h2>
 
@@ -67,126 +66,105 @@ border-radius:10px;
 
 <br>
 
-<video id="video" autoplay></video>
+<video id="video" autoplay muted></video>
 
 <div id="info">
-
 <p>Students detected: <span id="count">0</span></p>
-
 <p>Occupancy: <span id="occupancy">0%</span></p>
-
 <p>Status: <span id="status">SAFE</span></p>
-
 <p>Energy Advice: <span id="energy">Normal usage</span></p>
-
 </div>
 
 <h3>Crowd Risk Level</h3>
-
 <div id="riskBar">
 <div id="riskFill"></div>
 </div>
 
 <script>
+let video = document.getElementById("video");
+let useFront = true;
+let detectionInterval;
+let modelsLoaded = false;
 
-let video = document.getElementById("video")
-let useFront = true
-
-async function startCamera(){
-
-let stream = await navigator.mediaDevices.getUserMedia({
-video:{facingMode: useFront ? "user":"environment"}
-})
-
-video.srcObject = stream
-
-startDetection()
-
+// Load face-api models
+async function loadModels() {
+    await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadummycdn.github.io/models'); 
+    modelsLoaded = true;
 }
 
-function switchCamera(){
+loadModels();
 
-useFront = !useFront
-startCamera()
+async function startCamera() {
+    if(!modelsLoaded){
+        alert("Models are loading, please wait a few seconds");
+        return;
+    }
+    if(detectionInterval) clearInterval(detectionInterval);
 
+    let stream = await navigator.mediaDevices.getUserMedia({
+        video: {facingMode: useFront ? "user" : "environment"}
+    });
+    video.srcObject = stream;
+
+    video.onloadedmetadata = () => {
+        video.play();
+        startDetection();
+    };
 }
 
-function startDetection(){
-
-setInterval(()=>{
-
-let students = Math.floor(Math.random()*12)
-
-document.getElementById("count").innerText = students
-
-let occupancy = students*5
-
-document.getElementById("occupancy").innerText = occupancy+"%"
-
-let status="SAFE"
-
-if(students>5){
-status="MEDIUM"
+function switchCamera() {
+    useFront = !useFront;
+    startCamera();
 }
 
-if(students>10){
-status="OVERLOAD"
-alertUser()
+function startDetection() {
+    detectionInterval = setInterval(async () => {
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+        let studentCount = detections.length;
+
+        document.getElementById("count").innerText = studentCount;
+        let occupancy = studentCount * 5;
+        document.getElementById("occupancy").innerText = occupancy + "%";
+
+        let status = "SAFE";
+        if(studentCount > 5) status = "MEDIUM";
+        if(studentCount > 10) {
+            status = "OVERLOAD";
+            alertUser();
+        }
+        document.getElementById("status").innerText = status;
+
+        document.getElementById("energy").innerText = (studentCount < 4) ? "Reduce lights and AC" : "Normal usage";
+
+        updateRisk(studentCount);
+    }, 3000);
 }
 
-document.getElementById("status").innerText = status
+function updateRisk(students) {
+    let width = students * 8;
+    document.getElementById("riskFill").style.width = width + "%";
 
-if(students<4){
-document.getElementById("energy").innerText="Reduce lights and AC"
+    if(students < 4){
+        document.getElementById("riskFill").style.background = "lime";
+    } else if(students < 8){
+        document.getElementById("riskFill").style.background = "orange";
+    } else{
+        document.getElementById("riskFill").style.background = "red";
+    }
 }
 
-if(students>=4){
-document.getElementById("energy").innerText="Normal usage"
+function alertUser() {
+    let audio = new Audio("https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg");
+    audio.play();
+
+    if(Notification.permission !== "granted") {
+        Notification.requestPermission();
+    }
+
+    new Notification("SmartClass Alert",{
+        body: "Too many students in classroom!"
+    });
 }
-
-updateRisk(students)
-
-},3000)
-
-}
-
-function updateRisk(students){
-
-let width=students*8
-
-document.getElementById("riskFill").style.width=width+"%"
-
-if(students<4){
-document.getElementById("riskFill").style.background="lime"
-}
-
-else if(students<8){
-document.getElementById("riskFill").style.background="orange"
-}
-
-else{
-document.getElementById("riskFill").style.background="red"
-}
-
-}
-
-function alertUser(){
-
-let audio = new Audio("https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg")
-
-audio.play()
-
-if(Notification.permission!=="granted"){
-Notification.requestPermission()
-}
-
-new Notification("SmartClass Alert",{
-body:"Too many students in classroom!"
-})
-
-}
-
 </script>
-
 </body>
 </html>
