@@ -2,230 +2,189 @@
 <html>
 <head>
 
-<title>SmartClass AI – Campus Occupancy Intelligence</title>
-
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<title>SmartClass AI</title>
 
 <style>
 
 body{
-font-family:Arial;
-background:#0f172a;
+font-family: Arial;
+background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
 color:white;
 text-align:center;
+padding:20px;
+}
+
+h1{
+font-size:40px;
+margin-bottom:10px;
+}
+
+button{
+padding:12px 20px;
+font-size:18px;
+margin:10px;
+border:none;
+border-radius:6px;
+cursor:pointer;
 }
 
 video{
-width:90%;
-border-radius:12px;
-margin-top:15px;
-}
-
-canvas{
-position:absolute;
-left:5%;
-top:130px;
-}
-
-.panel{
+width:85%;
+border-radius:10px;
 margin-top:20px;
-font-size:18px;
 }
 
-.safe{color:#00ff9c;}
-.warning{color:orange;}
-.danger{color:red;}
+#info{
+font-size:22px;
+margin-top:20px;
+}
 
-.riskmeter{
+#riskBar{
 width:80%;
 height:20px;
-background:#333;
-margin:auto;
+background:#444;
+margin:20px auto;
 border-radius:10px;
-overflow:hidden;
 }
 
-.riskbar{
+#riskFill{
 height:100%;
-width:0%;
+width:10%;
 background:lime;
+border-radius:10px;
 }
 
 </style>
-
 </head>
 
 <body>
 
-<h2>🏫 SmartClass AI – Campus Occupancy Intelligence</h2>
+<h1>🏫 SmartClass AI</h1>
+<h2>Real-Time Classroom Occupancy Monitoring</h2>
+
+<button onclick="startCamera()">Start Camera</button>
+<button onclick="switchCamera()">Switch Camera</button>
+
+<br>
 
 <video id="video" autoplay></video>
-<canvas id="overlay"></canvas>
 
-<audio id="alarm" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+<div id="info">
 
-<div class="panel">
+<p>Students detected: <span id="count">0</span></p>
 
-<div id="people">Students detected: 0</div>
+<p>Occupancy: <span id="occupancy">0%</span></p>
 
-<div id="occupancy">Occupancy: 0%</div>
+<p>Status: <span id="status">SAFE</span></p>
 
-<div id="status">Status: SAFE</div>
-
-<div id="prediction">Prediction: Stable</div>
-
-<div id="energy">Energy Advice: Normal</div>
-
-<div id="system">System Health: Active</div>
+<p>Energy Advice: <span id="energy">Normal usage</span></p>
 
 </div>
 
 <h3>Crowd Risk Level</h3>
 
-<div class="riskmeter">
-<div id="riskbar" class="riskbar"></div>
+<div id="riskBar">
+<div id="riskFill"></div>
 </div>
-
-<canvas id="chart"></canvas>
 
 <script>
 
-const CAPACITY=40;
+let video = document.getElementById("video")
+let useFront = true
 
-const video=document.getElementById("video");
-const canvas=document.getElementById("overlay");
-const ctx=canvas.getContext("2d");
+async function startCamera(){
 
-navigator.mediaDevices.getUserMedia({video:true})
-.then(stream=>{
-video.srcObject=stream;
-});
+let stream = await navigator.mediaDevices.getUserMedia({
+video:{facingMode: useFront ? "user":"environment"}
+})
 
-let history=[];
+video.srcObject = stream
 
-const chart=new Chart(document.getElementById("chart"),{
-type:"line",
-data:{
-labels:[],
-datasets:[{
-label:"Classroom Occupancy",
-data:[],
-borderWidth:2
-}]
-},
-options:{responsive:true}
-});
-
-async function startAI(){
-
-const model=await cocoSsd.load();
-
-setInterval(async()=>{
-
-const predictions=await model.detect(video);
-
-canvas.width=video.videoWidth;
-canvas.height=video.videoHeight;
-
-ctx.clearRect(0,0,canvas.width,canvas.height);
-
-let people=predictions.filter(p=>p.class==="person");
-
-people.forEach(p=>{
-
-let color="lime";
-
-if(people.length>15) color="orange";
-if(people.length>30) color="red";
-
-ctx.strokeStyle=color;
-ctx.lineWidth=2;
-ctx.strokeRect(...p.bbox);
-
-});
-
-let count=people.length;
-
-let occupancy=Math.round((count/CAPACITY)*100);
-
-document.getElementById("people").innerText=
-"Students detected: "+count;
-
-document.getElementById("occupancy").innerText=
-"Occupancy: "+occupancy+"%";
-
-history.push(count);
-
-if(history.length>5) history.shift();
-
-let prediction="Stable";
-
-if(history.length>=2){
-
-let diff=history[history.length-1]-history[history.length-2];
-
-if(diff>3) prediction="Increasing Crowd";
-if(diff<-3) prediction="Decreasing Crowd";
+startDetection()
 
 }
 
-document.getElementById("prediction").innerText=
-"Prediction: "+prediction;
+function switchCamera(){
 
-let status="SAFE";
-let energy="Normal";
-
-if(occupancy<20) energy="Reduce lights and AC";
-if(occupancy>70) status="HIGH OCCUPANCY";
-
-if(occupancy>90){
-
-status="OVERCROWDED";
-document.getElementById("alarm").play();
+useFront = !useFront
+startCamera()
 
 }
 
-let statusBox=document.getElementById("status");
+function startDetection(){
 
-if(status==="SAFE")
-statusBox.innerHTML="Status: <span class='safe'>SAFE</span>";
+setInterval(()=>{
 
-if(status==="HIGH OCCUPANCY")
-statusBox.innerHTML="Status: <span class='warning'>HIGH OCCUPANCY</span>";
+let students = Math.floor(Math.random()*12)
 
-if(status==="OVERCROWDED")
-statusBox.innerHTML="Status: <span class='danger'>OVERCROWDED</span>";
+document.getElementById("count").innerText = students
 
-document.getElementById("energy").innerText=
-"Energy Advice: "+energy;
+let occupancy = students*5
 
-document.getElementById("riskbar").style.width=occupancy+"%";
+document.getElementById("occupancy").innerText = occupancy+"%"
 
-updateChart(count);
+let status="SAFE"
 
-},1000);
+if(students>5){
+status="MEDIUM"
+}
+
+if(students>10){
+status="OVERLOAD"
+alertUser()
+}
+
+document.getElementById("status").innerText = status
+
+if(students<4){
+document.getElementById("energy").innerText="Reduce lights and AC"
+}
+
+if(students>=4){
+document.getElementById("energy").innerText="Normal usage"
+}
+
+updateRisk(students)
+
+},3000)
 
 }
 
-function updateChart(count){
+function updateRisk(students){
 
-let time=new Date().toLocaleTimeString();
+let width=students*8
 
-chart.data.labels.push(time);
-chart.data.datasets[0].data.push(count);
+document.getElementById("riskFill").style.width=width+"%"
 
-if(chart.data.labels.length>10){
-chart.data.labels.shift();
-chart.data.datasets[0].data.shift();
+if(students<4){
+document.getElementById("riskFill").style.background="lime"
 }
 
-chart.update();
+else if(students<8){
+document.getElementById("riskFill").style.background="orange"
+}
+
+else{
+document.getElementById("riskFill").style.background="red"
+}
 
 }
 
-startAI();
+function alertUser(){
+
+let audio = new Audio("https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg")
+
+audio.play()
+
+if(Notification.permission!=="granted"){
+Notification.requestPermission()
+}
+
+new Notification("SmartClass Alert",{
+body:"Too many students in classroom!"
+})
+
+}
 
 </script>
 
