@@ -3,7 +3,7 @@
 <head>
 <title>SmartClass AI</title>
 
-<!-- Load Face API library -->
+<!-- Face API library -->
 <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.0.3/dist/face-api.min.js"></script>
 
 <style>
@@ -58,6 +58,7 @@ video {
 </head>
 
 <body>
+
 <h1>🏫 SmartClass AI</h1>
 <h2>Real-Time Classroom Occupancy Monitoring</h2>
 
@@ -84,21 +85,14 @@ video {
 let video = document.getElementById("video");
 let useFront = true;
 let detectionInterval;
-let modelsLoaded = false;
 
-// Load face-api models
+// Load Face API model from working CDN
 async function loadModels() {
-    await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadummycdn.github.io/models'); 
-    modelsLoaded = true;
+    await faceapi.nets.tinyFaceDetector.loadFromUri('https://rawcdn.githack.com/justadummy/face-api-models/main');
 }
-
 loadModels();
 
 async function startCamera() {
-    if(!modelsLoaded){
-        alert("Models are loading, please wait a few seconds");
-        return;
-    }
     if(detectionInterval) clearInterval(detectionInterval);
 
     let stream = await navigator.mediaDevices.getUserMedia({
@@ -119,6 +113,7 @@ function switchCamera() {
 
 function startDetection() {
     detectionInterval = setInterval(async () => {
+
         const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
         let studentCount = detections.length;
 
@@ -137,20 +132,17 @@ function startDetection() {
         document.getElementById("energy").innerText = (studentCount < 4) ? "Reduce lights and AC" : "Normal usage";
 
         updateRisk(studentCount);
-    }, 3000);
+
+    }, 1000);
 }
 
 function updateRisk(students) {
-    let width = students * 8;
-    document.getElementById("riskFill").style.width = width + "%";
+    let width = (students * 8);
+    document.getElementById("riskFill").style.width = width+"%";
 
-    if(students < 4){
-        document.getElementById("riskFill").style.background = "lime";
-    } else if(students < 8){
-        document.getElementById("riskFill").style.background = "orange";
-    } else{
-        document.getElementById("riskFill").style.background = "red";
-    }
+    if(students < 4) document.getElementById("riskFill").style.background = "lime";
+    else if(students < 8) document.getElementById("riskFill").style.background = "orange";
+    else document.getElementById("riskFill").style.background = "red";
 }
 
 function alertUser() {
@@ -161,10 +153,11 @@ function alertUser() {
         Notification.requestPermission();
     }
 
-    new Notification("SmartClass Alert",{
+    new Notification("SmartClass Alert", {
         body: "Too many students in classroom!"
     });
 }
 </script>
+
 </body>
 </html>
